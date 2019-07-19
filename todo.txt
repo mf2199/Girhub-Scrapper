@@ -1,0 +1,4 @@
+- Updating instead of rewriting table
+- PR status by color
+- Issue status by color
+- Assignees by issue assignees
