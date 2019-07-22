@@ -1,6 +1,11 @@
+"""
+Funtions and objects, which uses Google Sheets API to
+build review tables.
+"""
 import string
 import github_utils
 import operator
+import auth
 
 
 REPO_NAMES = {
@@ -22,33 +27,42 @@ RED = {
 }
 
 
+service = auth.authenticate()
+
+
 class Columns:
+    """Object for column processing and generating requests."""
     def __init__(self, cols_list):
         self.names = []
-        self.size_requests = []
-        self.align_requests = []
-        self.one_of_requests = []
+        self._requests = []
 
+        # generating requests from user's settings
         for index, col in enumerate(cols_list):
             self.names.append(col[0])
 
             if col[1] is not None:
-                self.size_requests.append(
+                self._requests.append(
                     self._gen_size_request(index, col[1])
                 )
 
             if col[2] in ('CENTER', 'LEFT', 'RIGHT'):
-                self.align_requests.append(
+                self._requests.append(
                     self._gen_align_request(index, col[2])
                 )
 
             if col[3] is not None:
-                self.one_of_requests.append(
+                self._requests.append(
                     self._gen_one_of_request(index, col[3])
                 )
 
     @property
+    def requests(self):
+        self._requests.append(self._title_row_request)
+        return self._requests
+
+    @property
     def sym_range(self):
+        """Return sumbolic range pointers for columns."""
         sym_range = 'A1:{last_letter}1'.format(
             last_letter=string.ascii_uppercase[
                 len(self.names) - 1
@@ -57,7 +71,8 @@ class Columns:
         return sym_range
 
     @property
-    def total_row_request(self):
+    def _title_row_request(self):
+        """Bolding and aligning title row."""
         request = [{
             'repeatCell': {
                 'fields': 'userEnteredFormat',
@@ -79,6 +94,7 @@ class Columns:
         return request
 
     def _gen_align_request(self, index, align):
+        """Align set request for user-specified columns."""
         request = {
             'repeatCell': {
                 'fields': 'userEnteredFormat',
@@ -101,6 +117,7 @@ class Columns:
 
 
     def _gen_size_request(self, index, size):
+        """Column width request for user-specified columns."""
         request = {
             "updateDimensionProperties": {
                 "properties": {"pixelSize": size},
@@ -117,6 +134,7 @@ class Columns:
         return request
 
     def _gen_one_of_request(self, index, values):
+        """Request to set data validation for user-specified columns."""
         vals = [{'userEnteredValue': value} for value in values]
 
         request = {
@@ -143,6 +161,7 @@ class Columns:
 
 
 def _make_color_request(row, column, color):
+    """Request, that changes color of specified cell."""
     request = {
         'repeatCell': {
             'fields': 'userEnteredFormat',
@@ -165,9 +184,11 @@ def _make_color_request(row, column, color):
 
 
 def _get_num_from_url(url):
+    """Get issue number from its URL."""
     return url.split(';')[1][1:-2]
 
 def _build_url(num, repo_lts):
+    """Build URL from issue number and repo name."""
     repo = REPO_NAMES[repo_lts]
     url = '=ГИПЕРССЫЛКА("https://github.com/{repo}/issues/{num}";"{num}")'.format(
         repo=repo, num=num
@@ -175,7 +196,7 @@ def _build_url(num, repo_lts):
     return url
 
 
-def create_new_sheet(service, title):
+def create_new_sheet(title):
     """Create new Google Sheet with given title."""
     body = {'properties': {'title': title}}
 
@@ -187,12 +208,12 @@ def create_new_sheet(service, title):
     return spreadsheet.get('spreadsheetId')
 
 
-def create_title_row(service, sheet_id, cols_list):
-    requests = []
-
+def create_title_row(sheet_id, cols_list):
+    """Creating title row for table."""
     columns = Columns(cols_list)
     body = {'values': [columns.names]}
 
+    # writing data
     service.spreadsheets().values().update(
         spreadsheetId=sheet_id,
         range=columns.sym_range,
@@ -200,39 +221,42 @@ def create_title_row(service, sheet_id, cols_list):
         body=body
     ).execute()
 
-    requests += columns.total_row_request
-    requests += columns.size_requests
-    requests += columns.align_requests
-    requests += columns.one_of_requests
+    if requests:
+        body = {'requests': columns.requests}
 
-    body = {'requests': requests}
-
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=sheet_id,
-        body=body
-    ).execute()
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body=body
+        ).execute()
 
 
-def read_sheet(service, sheet_id, range_):
-    result = service.spreadsheets().values().get(
+def read_sheet(sheet_id, range_):
+    """Reading the specified existing sheet."""
+    table = service.spreadsheets().values().get(
         spreadsheetId=sheet_id, range=range_
-    ).execute()
-    return result['values']
-
-
-def update_list(service, sheet_id, list_name):
-    table = read_sheet(service, sheet_id, list_name)[1:]
+    ).execute()['values'][1:]
+    # sorting table for cases if someone added issues manually
     table.sort(key=operator.itemgetter(5, 6, 1))
-    in_table = [(row[1], row[5]) for row in table]
+    return table
 
-    new_data, count = github_utils.build_whole_table()
-    in_new = [(_get_num_from_url(row[1]), row[5]) for row in new_data]
 
+def update_list(sheet_id, list_name):
+    """Updating specified list of Google Sheet document."""
     num = 0
     requests = []
 
+    # reading existing table
+    table = read_sheet(sheet_id, list_name)
+    # ids of already tracked issues
+    in_table = [(row[1], row[5]) for row in table]
+
+    # building new table from repositories
+    new_data, count = github_utils.build_whole_table()
+    in_new = [(_get_num_from_url(row[1]), row[5]) for row in new_data]
+
     while num < max(len(table), len(new_data)):
         try:
+            # checking if issue closed
             if not (table[num][1], table[num][5]) in in_new:
                 requests.append(_make_color_request(num + 1, 1, RED))
                 table[num][1] = _build_url(
@@ -244,17 +268,18 @@ def update_list(service, sheet_id, list_name):
         except IndexError:
             pass
 
+        # inserting new issues
         new_num = _get_num_from_url(new_data[num][1])
         if not (new_num, new_data[num][5]) in in_table:
             table.insert(num, new_data[num])
 
+        # updating tracked fields in existing data
         for field in github_utils.TRACKED_FIELDS:
             table[num][field] = new_data[num][field]
 
         num += 1
 
-    table.sort(key=sort_func)
-    save_to_sheet(service, sheet_id, table, count)
+    save_to_sheet(sheet_id, table, count)
 
     if requests:
         body = {'requests': requests}
@@ -269,7 +294,9 @@ def sort_func(item):
     return item[5], item[6], int(_get_num_from_url(item[1]))
 
 
-def save_to_sheet(service, sheet_id, rows, count):
+def save_to_sheet(sheet_id, rows, count):
+    """Update existing sheet with new data."""
+    rows.sort(key=sort_func)
     body = {'values': rows}
 
     result = service.spreadsheets().values().update(

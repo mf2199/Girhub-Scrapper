@@ -1,3 +1,7 @@
+"""
+Utils for reading data from GitHub issues and building
+ready-to-save table with this data.
+"""
 from github import Github
 import operator
 
@@ -14,6 +18,7 @@ PROJECTS = {
     'api: firestore': 'FireStore',
     'api: storage': 'Storage',
     'api: spanner': 'Spanner',
+    'api: core': 'Core',
 }
 
 REPO_NAMES = {
@@ -25,6 +30,7 @@ TRACKED_FIELDS = (1, 2, 6)
 
 
 def _get_project_name(labels):
+    """Designate project name from issue labels."""
     projects = set()
 
     for label in labels.get_page(0):
@@ -37,6 +43,7 @@ def _get_project_name(labels):
 
 
 def _build_issue_row(issue, repo):
+    """Building one row with issue data."""
     row = []
     if issue.pull_request is None:
         row.append('Medium')
@@ -51,6 +58,7 @@ def _build_issue_row(issue, repo):
 
 
 def build_whole_table():
+    """Building ready-to-save table of issues."""
     rows = []
     count = 2
     for repo in REPOS:
