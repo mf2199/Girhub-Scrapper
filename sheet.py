@@ -3,7 +3,13 @@ import github_utils
 import operator
 
 
-REPO_NAMES_INV = REPO_NAMES = {
+REPO_NAMES = {
+    'GCP': 'googleapis/google-cloud-python',
+    'GRMP': 'googleapis/google-resumable-media-python'
+}
+
+
+REPO_NAMES_INV = {
     'googleapis/google-cloud-python': 'GCP',
     'googleapis/google-resumable-media-python': 'GRMP'
 }
@@ -216,27 +222,30 @@ def read_sheet(service, sheet_id, range_):
 
 def update_list(service, sheet_id, list_name):
     table = read_sheet(service, sheet_id, list_name)[1:]
-    table.sort(key=operator.itemgetter(4, 5, 1))
-    in_table = [(row[1], row[4]) for row in table]
+    table.sort(key=operator.itemgetter(5, 6, 1))
+    in_table = [(row[1], row[5]) for row in table]
 
     new_data, count = github_utils.build_whole_table()
-    in_new = [(row[1], row[4]) for row in new_data]
+    in_new = [(_get_num_from_url(row[1]), row[5]) for row in new_data]
 
     num = 0
     requests = []
 
     while num < max(len(table), len(new_data)):
-        if not (table[num][1], table[num][4]) in in_new:
-            requests.append(_make_color_request(num + 1, 1, RED))
-            table[num][1] = _build_url(
-                table[num][1],
-                table[num][4]
-            )
-            num += 1
-            continue
+        try:
+            if not (table[num][1], table[num][5]) in in_new:
+                requests.append(_make_color_request(num + 1, 1, RED))
+                table[num][1] = _build_url(
+                    table[num][1],
+                    table[num][5]
+                )
+                num += 1
+                continue
+        except IndexError:
+            pass
 
         new_num = _get_num_from_url(new_data[num][1])
-        if not (new_num, new_data[num][4]) in in_table:
+        if not (new_num, new_data[num][5]) in in_table:
             table.insert(num, new_data[num])
 
         for field in github_utils.TRACKED_FIELDS:
@@ -247,12 +256,13 @@ def update_list(service, sheet_id, list_name):
     table.sort(key=sort_func)
     save_to_sheet(service, sheet_id, table, count)
 
-    body = {'requests': requests}
+    if requests:
+        body = {'requests': requests}
 
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=sheet_id,
-        body=body
-    ).execute()
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body=body
+        ).execute()
 
 
 def sort_func(item):

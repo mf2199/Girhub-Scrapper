@@ -21,7 +21,7 @@ REPO_NAMES = {
     'googleapis/google-resumable-media-python': 'GRMP'
 }
 
-TRACKED_FIELDS = (1, 2, 5)
+TRACKED_FIELDS = (1, 2, 6)
 
 
 def _get_project_name(labels):
