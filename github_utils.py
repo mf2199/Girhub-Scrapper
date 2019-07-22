@@ -6,11 +6,7 @@ from github import Github
 import operator
 
 
-REPOS = (
-    'googleapis/google-cloud-python',
-    'googleapis/google-resumable-media-python'
-)
-
+# links from labels to project names
 PROJECTS = {
     'api: pubsub': 'Pubsub',
     'api: bigtable': 'BigTable',
@@ -21,11 +17,15 @@ PROJECTS = {
     'api: core': 'Core',
 }
 
+# repos, from which we track issues
 REPO_NAMES = {
     'googleapis/google-cloud-python': 'GCP',
     'googleapis/google-resumable-media-python': 'GRMP'
 }
 
+REPO_NAMES_INV = dict((v, k) for k, v in REPO_NAMES.iteritems())
+# indexes of field, that must be updated on every update
+# other fields will be left unchanged
 TRACKED_FIELDS = (1, 2, 6)
 
 
@@ -61,7 +61,8 @@ def build_whole_table():
     """Building ready-to-save table of issues."""
     rows = []
     count = 2
-    for repo in REPOS:
+
+    for repo in REPOS_NAMES.keys():
         repo = gh.get_repo(repo)
         issues = repo.get_issues()
 

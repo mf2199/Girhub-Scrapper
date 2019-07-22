@@ -1,4 +1,3 @@
-- Updating instead of rewriting table
 - PR status by color
-- Issue status by color
 - Assignees by issue assignees
+- Refactor, so users can write column names instead of indexes

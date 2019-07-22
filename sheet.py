@@ -7,18 +7,6 @@ import github_utils
 import operator
 import auth
 
-
-REPO_NAMES = {
-    'GCP': 'googleapis/google-cloud-python',
-    'GRMP': 'googleapis/google-resumable-media-python'
-}
-
-
-REPO_NAMES_INV = {
-    'googleapis/google-cloud-python': 'GCP',
-    'googleapis/google-resumable-media-python': 'GRMP'
-}
-
 RED = {
     'red': 1,
     'green': 0.38,
@@ -189,7 +177,7 @@ def _get_num_from_url(url):
 
 def _build_url(num, repo_lts):
     """Build URL from issue number and repo name."""
-    repo = REPO_NAMES[repo_lts]
+    repo = github_utils.REPO_NAMES_INV[repo_lts]
     url = '=ГИПЕРССЫЛКА("https://github.com/{repo}/issues/{num}";"{num}")'.format(
         repo=repo, num=num
     )
